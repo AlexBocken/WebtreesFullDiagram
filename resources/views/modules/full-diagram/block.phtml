@@ -1,0 +1,74 @@
+<?php
+
+declare(strict_types=1);
+
+use Fisharebest\Webtrees\I18N;
+use Fisharebest\Webtrees\Individual;
+use Fisharebest\Webtrees\Module\ModuleChartInterface;
+use Fisharebest\Webtrees\Tree;
+
+/**
+ * @var ModuleChartInterface $module
+ * @var Individual          $individual
+ * @var Tree                $tree
+ * @var string              $tree_data
+ * @var string              $javascript_url
+ * @var string              $stylesheet_url
+ * @var int                 $block_id
+ * @var int                 $ancestor_generations
+ * @var int                 $descendant_generations
+ * @var bool                $show_siblings
+ */
+
+$containerId = 'full-diagram-block-' . $block_id;
+?>
+
+<link rel="stylesheet" href="<?= e($stylesheet_url) ?>">
+
+<div id="<?= $containerId ?>" class="full-diagram-container full-diagram-block wt-chart" data-tree-name="<?= e($tree->name()) ?>" style="height:450px;">
+    <div class="full-diagram-chart"></div>
+</div>
+
+<script>
+(function() {
+    if (!window.fullDiagramI18n) {
+        window.fullDiagramI18n = <?= json_encode([
+            'Born'            => I18N::translate('Born'),
+            'Baptism'         => I18N::translate('Baptism'),
+            'Marriage'        => I18N::translate('Marriage'),
+            'Died'            => I18N::translate('Died'),
+            'Occupation'      => I18N::translate('Occupation'),
+            'Residence'       => I18N::translate('Residence'),
+            'View profile'    => I18N::translate('View profile'),
+            'Died at age %s'  => I18N::translate('Died at age %s', '__AGE__'),
+            'Deceased'        => I18N::translate('Deceased'),
+            'Age ~%s'         => I18N::translate('Age ~%s', '__AGE__'),
+        ], JSON_THROW_ON_ERROR) ?>;
+    }
+    var data = <?= $tree_data ?>;
+    var baseUrl = <?= json_encode(route($module::ROUTE_NAME, [
+        'tree' => $tree->name(),
+        'xref' => '__XREF__',
+        'ancestor_generations' => $ancestor_generations,
+        'descendant_generations' => $descendant_generations,
+        'show_siblings' => $show_siblings ? '1' : '0',
+    ]), JSON_THROW_ON_ERROR) ?>;
+
+    function initBlock() {
+        if (typeof window.FullDiagramChart === 'undefined') {
+            // JS not loaded yet, retry
+            setTimeout(initBlock, 100);
+            return;
+        }
+        var chart = new window.FullDiagramChart('#<?= $containerId ?>', data, baseUrl);
+        chart.render();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBlock);
+    } else {
+        initBlock();
+    }
+})();
+</script>
+<script src="<?= e($javascript_url) ?>"></script>

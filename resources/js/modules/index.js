@@ -5,6 +5,9 @@
  */
 import Chart from "./lib/chart.js";
 
+// Expose Chart class for block usage
+window.FullDiagramChart = Chart;
+
 async function init() {
     const data = window.fullDiagramData;
     const baseUrl = window.fullDiagramBaseUrl;

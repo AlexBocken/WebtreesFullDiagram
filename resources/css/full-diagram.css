@@ -7,6 +7,20 @@
     border-radius: 0.5rem;
     background: #f8f9fa;
     overflow: hidden;
+    /* Break out of webtrees content column to use full viewport width */
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+}
+
+/* Block variant: stay within card boundaries */
+.full-diagram-block {
+    width: 100%;
+    margin-left: 0;
+    border-radius: 0.5rem;
+    border: 1px solid #dee2e6;
 }
 
 .full-diagram-chart {

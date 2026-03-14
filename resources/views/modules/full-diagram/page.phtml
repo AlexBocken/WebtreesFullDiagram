@@ -35,73 +35,94 @@ use FullDiagram\Configuration;
 
 <h2 class="wt-page-title"><?= $title ?></h2>
 
-<form method="post" class="wt-page-options wt-page-options-chart d-print-none mb-3">
-    <?= csrf_field() ?>
-
+<div class="wt-page-options wt-page-options-chart d-print-none mb-3">
     <div class="row g-3 align-items-end">
         <div class="col-auto">
             <label for="ancestor_generations" class="form-label">
-                <?= I18N::translate('Ancestor generations') ?>
+                <?= I18N::translate('Generations of ancestors') ?>
             </label>
-            <input
-                type="range"
-                class="form-range"
-                id="ancestor_generations"
-                name="ancestor_generations"
-                min="<?= $min_generations ?>"
-                max="<?= $max_generations ?>"
-                value="<?= $ancestor_generations ?>"
-                oninput="document.getElementById('ancestor_gen_label').textContent = this.value"
-            >
-            <span id="ancestor_gen_label" class="badge bg-secondary"><?= $ancestor_generations ?></span>
-        </div>
-
-        <div class="col-auto">
-            <label for="descendant_generations" class="form-label">
-                <?= I18N::translate('Descendant generations') ?>
-            </label>
-            <input
-                type="range"
-                class="form-range"
-                id="descendant_generations"
-                name="descendant_generations"
-                min="<?= $min_generations ?>"
-                max="<?= $max_generations ?>"
-                value="<?= $descendant_generations ?>"
-                oninput="document.getElementById('descendant_gen_label').textContent = this.value"
-            >
-            <span id="descendant_gen_label" class="badge bg-secondary"><?= $descendant_generations ?></span>
-        </div>
-
-        <div class="col-auto">
-            <div class="form-check">
+            <div class="d-flex align-items-center gap-2">
                 <input
-                    type="checkbox"
-                    class="form-check-input"
-                    id="show_siblings"
-                    name="show_siblings"
-                    value="1"
-                    <?= $show_siblings ? 'checked' : '' ?>
+                    type="range"
+                    class="form-range"
+                    id="ancestor_generations"
+                    min="<?= $min_generations ?>"
+                    max="<?= $max_generations ?>"
+                    value="<?= $ancestor_generations ?>"
+                    style="width: 120px;"
                 >
-                <label class="form-check-label" for="show_siblings">
-                    <?= I18N::translate('Show siblings') ?>
-                </label>
+                <span id="ancestor_gen_label" class="badge bg-secondary"><?= $ancestor_generations ?></span>
             </div>
         </div>
 
         <div class="col-auto">
-            <button type="submit" class="btn btn-primary">
-                <?= I18N::translate('View') ?>
-            </button>
+            <label for="descendant_generations" class="form-label">
+                <?= I18N::translate('Generations of descendants') ?>
+            </label>
+            <div class="d-flex align-items-center gap-2">
+                <input
+                    type="range"
+                    class="form-range"
+                    id="descendant_generations"
+                    min="<?= $min_generations ?>"
+                    max="<?= $max_generations ?>"
+                    value="<?= $descendant_generations ?>"
+                    style="width: 120px;"
+                >
+                <span id="descendant_gen_label" class="badge bg-secondary"><?= $descendant_generations ?></span>
+            </div>
         </div>
+
     </div>
-</form>
+</div>
 
 <?= view($module->name() . '::modules/full-diagram/chart', [
-    'module'         => $module,
-    'individual'     => $individual,
-    'tree'           => $tree,
-    'tree_data'      => $tree_data,
-    'javascript_url' => $javascript_url,
-    'stylesheet_url' => $stylesheet_url,
+    'module'                 => $module,
+    'individual'             => $individual,
+    'tree'                   => $tree,
+    'tree_data'              => $tree_data,
+    'javascript_url'         => $javascript_url,
+    'stylesheet_url'         => $stylesheet_url,
+    'ancestor_generations'   => $ancestor_generations,
+    'descendant_generations' => $descendant_generations,
+    'show_siblings'          => $show_siblings,
 ]) ?>
+
+<script>
+(function() {
+    var baseChartUrl = <?= json_encode(route($module::ROUTE_NAME, [
+        'tree' => $tree->name(),
+        'xref' => $individual->xref(),
+    ]), JSON_THROW_ON_ERROR) ?>;
+
+    var timer = null;
+
+    function navigate() {
+        var ag = document.getElementById('ancestor_generations').value;
+        var dg = document.getElementById('descendant_generations').value;
+        var sep = baseChartUrl.indexOf('?') === -1 ? '?' : '&';
+        window.location.href = baseChartUrl + sep
+            + 'ancestor_generations=' + ag
+            + '&descendant_generations=' + dg
+            + '&show_siblings=1';
+    }
+
+    function scheduleNavigate() {
+        clearTimeout(timer);
+        timer = setTimeout(navigate, 400);
+    }
+
+    var ag = document.getElementById('ancestor_generations');
+    var dg = document.getElementById('descendant_generations');
+
+    ag.addEventListener('input', function() {
+        document.getElementById('ancestor_gen_label').textContent = this.value;
+    });
+    dg.addEventListener('input', function() {
+        document.getElementById('descendant_gen_label').textContent = this.value;
+    });
+
+    ag.addEventListener('change', scheduleNavigate);
+    dg.addEventListener('change', scheduleNavigate);
+})();
+</script>

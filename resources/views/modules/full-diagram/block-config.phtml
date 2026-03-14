@@ -1,0 +1,81 @@
+<?php
+
+declare(strict_types=1);
+
+use Fisharebest\Webtrees\I18N;
+use Fisharebest\Webtrees\Individual;
+use Fisharebest\Webtrees\Tree;
+
+/**
+ * @var Individual|null $individual
+ * @var Tree            $tree
+ * @var int             $ancestor_generations
+ * @var int             $descendant_generations
+ * @var bool            $show_siblings
+ */
+?>
+
+<div class="row mb-3">
+    <label class="col-sm-3 col-form-label" for="xref">
+        <?= I18N::translate('Individual') ?>
+    </label>
+    <div class="col-sm-9">
+        <?= view('components/select-individual', [
+            'name'       => 'xref',
+            'individual' => $individual,
+            'tree'       => $tree,
+        ]) ?>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <label class="col-sm-3 col-form-label" for="ancestor_generations">
+        <?= I18N::translate('Generations of ancestors') ?>
+    </label>
+    <div class="col-sm-9">
+        <input
+            type="number"
+            class="form-control"
+            id="ancestor_generations"
+            name="ancestor_generations"
+            min="1"
+            max="10"
+            value="<?= $ancestor_generations ?>"
+        >
+    </div>
+</div>
+
+<div class="row mb-3">
+    <label class="col-sm-3 col-form-label" for="descendant_generations">
+        <?= I18N::translate('Generations of descendants') ?>
+    </label>
+    <div class="col-sm-9">
+        <input
+            type="number"
+            class="form-control"
+            id="descendant_generations"
+            name="descendant_generations"
+            min="1"
+            max="10"
+            value="<?= $descendant_generations ?>"
+        >
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-sm-9 offset-sm-3">
+        <div class="form-check">
+            <input
+                type="checkbox"
+                class="form-check-input"
+                id="show_siblings"
+                name="show_siblings"
+                value="1"
+                <?= $show_siblings ? 'checked' : '' ?>
+            >
+            <label class="form-check-label" for="show_siblings">
+                <?= I18N::translate('Show siblings') ?>
+            </label>
+        </div>
+    </div>
+</div>

@@ -3,11 +3,23 @@
  *
  * Shows: full name, profile photo, birth, baptism, marriage, death,
  * occupation, residence, current age (if alive) or age at death.
+ *
+ * Uses window.fullDiagramI18n for translated labels.
  */
 import { select } from "../d3.js";
 
 let activeTooltip = null;
 let hideTimer = null;
+
+/** Get a translated string, with optional substitution. */
+function t(key, ...args) {
+    const i18n = window.fullDiagramI18n || {};
+    let str = i18n[key] || key;
+    for (const arg of args) {
+        str = str.replace("__AGE__", arg);
+    }
+    return str;
+}
 
 /**
  * Show a bio card tooltip for a person.
@@ -59,19 +71,19 @@ export function showBioCard(data, cardElement, containerSelector) {
     // Facts list
     const facts = tooltip.append("div").attr("class", "bio-facts");
 
-    addFact(facts, "Born", data.birthDate, data.birthPlace);
-    addFact(facts, "Baptism", data.baptismDate);
-    addFact(facts, "Marriage", data.marriageDate);
-    addFact(facts, "Died", data.deathDate, data.deathPlace);
-    addFact(facts, "Occupation", data.occupation);
-    addFact(facts, "Residence", data.residence);
+    addFact(facts, t("Born"), data.birthDate, data.birthPlace);
+    addFact(facts, t("Baptism"), data.baptismDate);
+    addFact(facts, t("Marriage"), data.marriageDate);
+    addFact(facts, t("Died"), data.deathDate, data.deathPlace);
+    addFact(facts, t("Occupation"), data.occupation);
+    addFact(facts, t("Residence"), data.residence);
 
     // Link to profile
     tooltip
         .append("a")
         .attr("href", data.url)
         .attr("class", "bio-link")
-        .text("View profile \u2192");
+        .text(t("View profile") + " \u2192");
 
     activeTooltip = tooltip;
 }
@@ -100,15 +112,15 @@ function computeAge(data) {
             const deathYear = parseInt(data.deathYear, 10);
             if (!isNaN(deathYear)) {
                 const age = deathYear - birthYear;
-                return `Died at age ${age}`;
+                return t("Died at age %s", age);
             }
         }
-        return "Deceased";
+        return t("Deceased");
     }
 
     const currentYear = new Date().getFullYear();
     const age = currentYear - birthYear;
-    return `Age ~${age}`;
+    return t("Age ~%s", age);
 }
 
 function scheduleHide() {
