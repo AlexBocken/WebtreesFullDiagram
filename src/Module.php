@@ -42,10 +42,10 @@ class Module extends AbstractModule implements ModuleChartInterface, ModuleCusto
     public const ROUTE_NAME = 'full-diagram';
     public const ROUTE_URL  = '/tree/{tree}/full-diagram/{xref}';
 
-    private const DEFAULT_ANCESTOR_GENERATIONS   = 4;
-    private const DEFAULT_DESCENDANT_GENERATIONS = 4;
-    private const BLOCK_DEFAULT_ANCESTOR_GENS    = 4;
-    private const BLOCK_DEFAULT_DESCENDANT_GENS  = 4;
+    private const DEFAULT_ANCESTOR_GENERATIONS   = 3;
+    private const DEFAULT_DESCENDANT_GENERATIONS = 3;
+    private const BLOCK_DEFAULT_ANCESTOR_GENS    = 3;
+    private const BLOCK_DEFAULT_DESCENDANT_GENS  = 3;
     private const MINIMUM_GENERATIONS            = 1;
     private const MAXIMUM_GENERATIONS            = 10;
 

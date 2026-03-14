@@ -7,8 +7,8 @@ namespace FullDiagram;
 class Configuration
 {
     public function __construct(
-        private readonly int  $ancestorGenerations = 4,
-        private readonly int  $descendantGenerations = 4,
+        private readonly int  $ancestorGenerations = 3,
+        private readonly int  $descendantGenerations = 3,
         private readonly bool $showSiblings = true,
     ) {
     }

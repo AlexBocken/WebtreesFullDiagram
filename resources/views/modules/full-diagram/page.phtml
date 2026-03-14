@@ -21,8 +21,6 @@ use FullDiagram\Configuration;
  * @var int                 $ancestor_generations
  * @var int                 $descendant_generations
  * @var bool                $show_siblings
- * @var int                 $max_generations
- * @var int                 $min_generations
  */
 ?>
 
@@ -35,47 +33,6 @@ use FullDiagram\Configuration;
 
 <h2 class="wt-page-title"><?= $title ?></h2>
 
-<div class="wt-page-options wt-page-options-chart d-print-none mb-3">
-    <div class="row g-3 align-items-end">
-        <div class="col-auto">
-            <label for="ancestor_generations" class="form-label">
-                <?= I18N::translate('Generations of ancestors') ?>
-            </label>
-            <div class="d-flex align-items-center gap-2">
-                <input
-                    type="range"
-                    class="form-range"
-                    id="ancestor_generations"
-                    min="<?= $min_generations ?>"
-                    max="<?= $max_generations ?>"
-                    value="<?= $ancestor_generations ?>"
-                    style="width: 120px;"
-                >
-                <span id="ancestor_gen_label" class="badge bg-secondary"><?= $ancestor_generations ?></span>
-            </div>
-        </div>
-
-        <div class="col-auto">
-            <label for="descendant_generations" class="form-label">
-                <?= I18N::translate('Generations of descendants') ?>
-            </label>
-            <div class="d-flex align-items-center gap-2">
-                <input
-                    type="range"
-                    class="form-range"
-                    id="descendant_generations"
-                    min="<?= $min_generations ?>"
-                    max="<?= $max_generations ?>"
-                    value="<?= $descendant_generations ?>"
-                    style="width: 120px;"
-                >
-                <span id="descendant_gen_label" class="badge bg-secondary"><?= $descendant_generations ?></span>
-            </div>
-        </div>
-
-    </div>
-</div>
-
 <?= view($module->name() . '::modules/full-diagram/chart', [
     'module'                 => $module,
     'individual'             => $individual,
@@ -87,42 +44,3 @@ use FullDiagram\Configuration;
     'descendant_generations' => $descendant_generations,
     'show_siblings'          => $show_siblings,
 ]) ?>
-
-<script>
-(function() {
-    var baseChartUrl = <?= json_encode(route($module::ROUTE_NAME, [
-        'tree' => $tree->name(),
-        'xref' => $individual->xref(),
-    ]), JSON_THROW_ON_ERROR) ?>;
-
-    var timer = null;
-
-    function navigate() {
-        var ag = document.getElementById('ancestor_generations').value;
-        var dg = document.getElementById('descendant_generations').value;
-        var sep = baseChartUrl.indexOf('?') === -1 ? '?' : '&';
-        window.location.href = baseChartUrl + sep
-            + 'ancestor_generations=' + ag
-            + '&descendant_generations=' + dg
-            + '&show_siblings=1';
-    }
-
-    function scheduleNavigate() {
-        clearTimeout(timer);
-        timer = setTimeout(navigate, 400);
-    }
-
-    var ag = document.getElementById('ancestor_generations');
-    var dg = document.getElementById('descendant_generations');
-
-    ag.addEventListener('input', function() {
-        document.getElementById('ancestor_gen_label').textContent = this.value;
-    });
-    dg.addEventListener('input', function() {
-        document.getElementById('descendant_gen_label').textContent = this.value;
-    });
-
-    ag.addEventListener('change', scheduleNavigate);
-    dg.addEventListener('change', scheduleNavigate);
-})();
-</script>

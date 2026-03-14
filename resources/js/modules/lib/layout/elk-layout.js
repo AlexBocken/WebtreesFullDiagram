@@ -338,7 +338,7 @@ function extractPositions(elkResult, builder, config) {
         if (raw) unionGenY.set(id, raw.cy);
     }
 
-    // ── Step 4: Build final positioned nodes (centered on root) ──
+    // ── Step 4: Build initial positions (centered on root) ──
     const posMap = new Map(); // id → { x, y }
 
     // Recalculate rootY using the snapped generation Y
@@ -359,17 +359,65 @@ function extractPositions(elkResult, builder, config) {
 
         const finalX = raw.cx - rootX;
         posMap.set(id, { x: finalX, y: finalY });
+    }
+
+    // ── Step 4b: Resolve overlaps per generation row ──
+    // After Y-snapping, nodes from different ELK layers may now share a row.
+    // For each generation, sort by X and push overlapping nodes apart.
+    const minGap = config.cardWidth + config.horizontalSpacing;
+
+    for (const [gen, nodes] of genGroups) {
+        // Get current X positions for this generation's person nodes
+        const rowNodes = nodes
+            .map((n) => ({ id: n.id, x: posMap.get(n.id)?.x ?? 0 }))
+            .sort((a, b) => a.x - b.x);
+
+        // Sweep left to right, push overlapping nodes to the right
+        for (let i = 1; i < rowNodes.length; i++) {
+            const prev = rowNodes[i - 1];
+            const curr = rowNodes[i];
+            const overlap = prev.x + minGap - curr.x;
+            if (overlap > 0) {
+                curr.x = prev.x + minGap;
+                const pos = posMap.get(curr.id);
+                if (pos) pos.x = curr.x;
+            }
+        }
+
+        // Re-center the row so shifts don't drift the whole diagram
+        // Calculate how much the row center shifted and compensate
+        const origXs = nodes
+            .map((n) => rawPos.get(n.id)?.cx ?? 0)
+            .sort((a, b) => a - b);
+        const newXs = rowNodes.map((n) => n.x).sort((a, b) => a - b);
+        const origCenter = (origXs[0] + origXs[origXs.length - 1]) / 2 - rootX;
+        const newCenter = (newXs[0] + newXs[newXs.length - 1]) / 2;
+        const drift = newCenter - origCenter;
+
+        if (Math.abs(drift) > 1) {
+            for (const rn of rowNodes) {
+                rn.x -= drift;
+                const pos = posMap.get(rn.id);
+                if (pos) pos.x = rn.x;
+            }
+        }
+    }
+
+    // ── Step 4c: Collect final positioned nodes ──
+    for (const [id, node] of builder.nodes) {
+        const pos = posMap.get(id);
+        if (!pos) continue;
 
         if (node.type === "person") {
             persons.push({
-                x: finalX,
-                y: finalY,
+                x: pos.x,
+                y: pos.y,
                 id: node.id,
                 isMain: node.isMain,
                 data: node.data,
             });
         } else {
-            unions.push({ id: id, x: finalX, y: finalY });
+            unions.push({ id: id, x: pos.x, y: pos.y });
         }
     }
 
