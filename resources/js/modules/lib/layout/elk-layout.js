@@ -5,8 +5,7 @@
  * guaranteed overlap-free positioning. Connector lines are drawn
  * manually using clean orthogonal bus lines (not ELK's edge routing).
  *
- * Post-processing snaps all people of the same generation to the same
- * Y coordinate and repositions union nodes between generation rows.
+ * ELK handles all node placement — no post-processing adjustments.
  * Spouse-grouped node ordering keeps couples placed close together.
  *
  * Input: flat person array with rels { parents, spouses, children }
@@ -265,8 +264,8 @@ function extractPositions(elkResult, builder, config) {
 
     const halfH = config.cardHeight / 2;
 
-    // ── Step 1: Read raw ELK positions ──
-    const rawPos = new Map(); // id → { cx, cy }
+    // ── Step 1: Read raw ELK positions (centered on root) ──
+    const posMap = new Map(); // id → { x, y }
     let rootX = 0,
         rootY = 0;
 
@@ -275,153 +274,50 @@ function extractPositions(elkResult, builder, config) {
         if (!nodeInfo) continue;
         const cx = elkNode.x + elkNode.width / 2;
         const cy = elkNode.y + elkNode.height / 2;
-        rawPos.set(elkNode.id, { cx, cy });
         if (nodeInfo.isMain) {
             rootX = cx;
             rootY = cy;
         }
+        posMap.set(elkNode.id, { cx, cy });
     }
 
-    // ── Step 2: Snap person nodes to generation rows ──
-    // Group person nodes by generation, compute median Y for each generation
-    const genGroups = new Map(); // generation → [{ id, cx, cy }]
-    for (const [id, pos] of rawPos) {
+    // ── Step 2: Snap person Y to generation rows (keep ELK X untouched) ──
+    // Group persons by generation, compute median Y per generation
+    const genGroups = new Map(); // generation → [id, ...]
+    for (const [id, pos] of posMap) {
         const nodeInfo = builder.nodes.get(id);
         if (!nodeInfo || nodeInfo.type !== "person") continue;
-        const gen = builder.generations.get(id) || 0;
+        const gen = builder.generations.get(id) ?? 0;
         if (!genGroups.has(gen)) genGroups.set(gen, []);
-        genGroups.get(gen).push({ id, ...pos });
+        genGroups.get(gen).push(id);
     }
 
-    // For each generation, use the median Y as the canonical row Y
-    const genY = new Map(); // generation → snapped Y
-    for (const [gen, nodes] of genGroups) {
-        const ys = nodes.map((n) => n.cy).sort((a, b) => a - b);
+    const genY = new Map(); // generation → canonical Y
+    for (const [gen, ids] of genGroups) {
+        const ys = ids.map((id) => posMap.get(id).cy).sort((a, b) => a - b);
         const mid = Math.floor(ys.length / 2);
-        const medianY =
-            ys.length % 2 === 0 ? (ys[mid - 1] + ys[mid]) / 2 : ys[mid];
-        genY.set(gen, medianY);
+        genY.set(
+            gen,
+            ys.length % 2 === 0 ? (ys[mid - 1] + ys[mid]) / 2 : ys[mid]
+        );
     }
 
-    // ── Step 3: Compute union node Y positions ──
-    // Each union sits between its parent generation row and child generation row
-    const unionGenY = new Map(); // unionId → snapped Y
-    for (const [id, node] of builder.nodes) {
-        if (node.type !== "union") continue;
+    // Apply: center on root, snap person Y to generation row
+    const mainGen = builder.generations.get(builder.mainId) ?? 0;
+    const snappedRootY = genY.get(mainGen) ?? rootY;
 
-        // Find parent generation (edges INTO this union)
-        let parentGen = null;
-        let childGen = null;
-        for (const edge of builder.edges) {
-            if (edge.target === id && builder.generations.has(edge.source)) {
-                parentGen = builder.generations.get(edge.source);
-            }
-            if (edge.source === id && builder.generations.has(edge.target)) {
-                childGen = builder.generations.get(edge.target);
-            }
-        }
-
-        if (parentGen !== null && childGen !== null) {
-            const pY = genY.get(parentGen);
-            const cY = genY.get(childGen);
-            if (pY !== undefined && cY !== undefined) {
-                // Place union at: parent bottom edge + 40% of gap to child top edge
-                const parentBottom = pY + halfH;
-                const childTop = cY - halfH;
-                unionGenY.set(id, parentBottom + (childTop - parentBottom) * 0.4);
-                continue;
-            }
-        }
-
-        // Fallback: use raw ELK position
-        const raw = rawPos.get(id);
-        if (raw) unionGenY.set(id, raw.cy);
-    }
-
-    // ── Step 4: Build initial positions (centered on root) ──
-    const posMap = new Map(); // id → { x, y }
-
-    // Recalculate rootY using the snapped generation Y
-    const mainGen = builder.generations.get(builder.mainId) || 0;
-    const snappedRootY = genY.get(mainGen) || rootY;
-
-    for (const [id, node] of builder.nodes) {
-        const raw = rawPos.get(id);
-        if (!raw) continue;
-
-        let finalY;
-        if (node.type === "person") {
-            const gen = builder.generations.get(id) || 0;
-            finalY = (genY.get(gen) || raw.cy) - snappedRootY;
+    for (const [id, pos] of posMap) {
+        const nodeInfo = builder.nodes.get(id);
+        pos.x = pos.cx - rootX;
+        if (nodeInfo && nodeInfo.type === "person") {
+            const gen = builder.generations.get(id) ?? 0;
+            pos.y = (genY.get(gen) ?? pos.cy) - snappedRootY;
         } else {
-            finalY = (unionGenY.get(id) || raw.cy) - snappedRootY;
-        }
-
-        const finalX = raw.cx - rootX;
-        posMap.set(id, { x: finalX, y: finalY });
-    }
-
-    // ── Step 4b: Resolve overlaps per generation row ──
-    // After Y-snapping, nodes from different ELK layers may now share a row.
-    // For each generation, sort by X and push overlapping nodes apart.
-    const minGap = config.cardWidth + config.horizontalSpacing;
-
-    for (const [gen, nodes] of genGroups) {
-        // Get current X positions for this generation's person nodes
-        const rowNodes = nodes
-            .map((n) => ({ id: n.id, x: posMap.get(n.id)?.x ?? 0 }))
-            .sort((a, b) => a.x - b.x);
-
-        // Sweep left to right, push overlapping nodes to the right
-        for (let i = 1; i < rowNodes.length; i++) {
-            const prev = rowNodes[i - 1];
-            const curr = rowNodes[i];
-            const overlap = prev.x + minGap - curr.x;
-            if (overlap > 0) {
-                curr.x = prev.x + minGap;
-                const pos = posMap.get(curr.id);
-                if (pos) pos.x = curr.x;
-            }
-        }
-
-        // Re-center the row so shifts don't drift the whole diagram
-        // Calculate how much the row center shifted and compensate
-        const origXs = nodes
-            .map((n) => rawPos.get(n.id)?.cx ?? 0)
-            .sort((a, b) => a - b);
-        const newXs = rowNodes.map((n) => n.x).sort((a, b) => a - b);
-        const origCenter = (origXs[0] + origXs[origXs.length - 1]) / 2 - rootX;
-        const newCenter = (newXs[0] + newXs[newXs.length - 1]) / 2;
-        const drift = newCenter - origCenter;
-
-        if (Math.abs(drift) > 1) {
-            for (const rn of rowNodes) {
-                rn.x -= drift;
-                const pos = posMap.get(rn.id);
-                if (pos) pos.x = rn.x;
-            }
+            pos.y = pos.cy - snappedRootY;
         }
     }
 
-    // ── Step 4c: Collect final positioned nodes ──
-    for (const [id, node] of builder.nodes) {
-        const pos = posMap.get(id);
-        if (!pos) continue;
-
-        if (node.type === "person") {
-            persons.push({
-                x: pos.x,
-                y: pos.y,
-                id: node.id,
-                isMain: node.isMain,
-                data: node.data,
-            });
-        } else {
-            unions.push({ id: id, x: pos.x, y: pos.y });
-        }
-    }
-
-    // ── Step 5: Build clean bus-line connectors ──
+    // ── Step 3: Build edge maps ──
     const incomingToUnion = new Map();
     const outgoingFromUnion = new Map();
 
@@ -442,13 +338,99 @@ function extractPositions(elkResult, builder, config) {
         }
     }
 
+    // ── Step 4: Snap union Y to grid between generation rows ──
+    // Compute a consistent couple-bar Y and child-bus Y for each
+    // pair of adjacent generations, so all connectors align on a grid.
+    const sortedGens = [...genY.keys()].sort((a, b) => a - b);
+
+    // coupleBarY: between parent gen and child gen (40% down from parent bottom)
+    // childBusY: between parent gen and child gen (70% down from parent bottom)
+    const coupleBarY = new Map(); // "parentGen|childGen" → Y
+    const childBusY = new Map();
+
+    for (let i = 0; i < sortedGens.length - 1; i++) {
+        const upperGen = sortedGens[i];
+        const lowerGen = sortedGens[i + 1];
+        const upperY = (genY.get(upperGen) ?? 0) - snappedRootY;
+        const lowerY = (genY.get(lowerGen) ?? 0) - snappedRootY;
+        const parentBottom = upperY + halfH;
+        const childTop = lowerY - halfH;
+        const gap = childTop - parentBottom;
+        const key = `${upperGen}|${lowerGen}`;
+        coupleBarY.set(key, parentBottom + gap * 0.35);
+        childBusY.set(key, parentBottom + gap * 0.65);
+    }
+
+    // Snap each union node Y to the couple-bar grid line
+    for (const [unionId, node] of builder.nodes) {
+        if (node.type !== "union") continue;
+        const parentIds = incomingToUnion.get(unionId) || [];
+        const childIds = outgoingFromUnion.get(unionId) || [];
+        if (parentIds.length === 0 || childIds.length === 0) continue;
+
+        const parentGen = builder.generations.get(parentIds[0]);
+        const childGen = builder.generations.get(childIds[0]);
+        if (parentGen === undefined || childGen === undefined) continue;
+
+        const key = `${parentGen}|${childGen}`;
+        const barY = coupleBarY.get(key);
+        if (barY !== undefined) {
+            const pos = posMap.get(unionId);
+            if (pos) pos.y = barY;
+        }
+    }
+
+    // ── Step 5: Collect final positioned nodes ──
+    for (const [id, node] of builder.nodes) {
+        const pos = posMap.get(id);
+        if (!pos) continue;
+
+        if (node.type === "person") {
+            persons.push({
+                x: pos.x,
+                y: pos.y,
+                id: node.id,
+                isMain: node.isMain,
+                data: node.data,
+            });
+        } else {
+            unions.push({ id: id, x: pos.x, y: pos.y });
+        }
+    }
+
+    // ── Step 6: Build grid-aligned bus-line connectors ──
+
+    // Pre-compute offsets for parents in multiple unions (multiple spouses).
+    // Each union a parent belongs to gets an offset so the vertical drop
+    // lines fan out from the card instead of overlapping at center.
+    const parentToUnions = new Map(); // personId → [unionId, ...]
+    for (const union of unions) {
+        for (const pid of incomingToUnion.get(union.id) || []) {
+            if (!parentToUnions.has(pid)) parentToUnions.set(pid, []);
+            parentToUnions.get(pid).push(union.id);
+        }
+    }
+
+    // Sort each parent's unions by their union X so offsets are spatially consistent
+    const dropOffset = new Map(); // "personId|unionId" → offset pixels
+    const offsetStep = 14;
+    for (const [pid, uids] of parentToUnions) {
+        if (uids.length <= 1) continue;
+        uids.sort((a, b) => {
+            const ua = unions.find((u) => u.id === a);
+            const ub = unions.find((u) => u.id === b);
+            return (ua?.x ?? 0) - (ub?.x ?? 0);
+        });
+        for (let i = 0; i < uids.length; i++) {
+            const off = (i - (uids.length - 1) / 2) * offsetStep;
+            dropOffset.set(`${pid}|${uids[i]}`, off);
+        }
+    }
+
     for (const union of unions) {
         const parentIds = incomingToUnion.get(union.id) || [];
         const childIds = outgoingFromUnion.get(union.id) || [];
 
-        const parents = parentIds
-            .map((id) => posMap.get(id))
-            .filter(Boolean);
         const children = childIds
             .map((id) => posMap.get(id))
             .filter(Boolean);
@@ -457,21 +439,29 @@ function extractPositions(elkResult, builder, config) {
         const uy = union.y;
 
         // ── Parent → union connections ──
-        if (parents.length > 0) {
-            // Horizontal couple bar at union Y
-            if (parents.length >= 2) {
-                const xs = parents.map((p) => p.x).sort((a, b) => a - b);
+        if (parentIds.length > 0) {
+            // Compute the drop X for each parent (offset if multi-spouse)
+            const dropXs = parentIds.map((pid) => {
+                const pos = posMap.get(pid);
+                if (!pos) return null;
+                const off = dropOffset.get(`${pid}|${union.id}`) ?? 0;
+                return { pid, x: pos.x + off, y: pos.y };
+            }).filter(Boolean);
+
+            // Horizontal couple bar between the drop points
+            if (dropXs.length >= 2) {
+                const xs = dropXs.map((d) => d.x).sort((a, b) => a - b);
                 connections.push({
                     path: `M ${xs[0]} ${uy} L ${xs[xs.length - 1]} ${uy}`,
                     cssClass: "link couple-link",
                 });
             }
 
-            // Vertical drop from each parent's bottom edge to couple bar Y
-            for (const p of parents) {
-                const bottomY = p.y + halfH;
+            // Vertical drop from each parent's bottom edge to couple bar
+            for (const d of dropXs) {
+                const bottomY = d.y + halfH;
                 connections.push({
-                    path: `M ${p.x} ${bottomY} L ${p.x} ${uy}`,
+                    path: `M ${d.x} ${bottomY} L ${d.x} ${uy}`,
                     cssClass: "link ancestor-link",
                 });
             }
@@ -479,24 +469,31 @@ function extractPositions(elkResult, builder, config) {
 
         // ── Union → children connections ──
         if (children.length > 0) {
-            // Bus Y halfway between union and children's top edge
-            const childY = children[0].y;
-            const busY = uy + (childY - halfH - uy) / 2;
+            // Use grid-aligned bus Y for this generation pair
+            const parentGen = parentIds.length > 0
+                ? builder.generations.get(parentIds[0])
+                : undefined;
+            const childGen = childIds.length > 0
+                ? builder.generations.get(childIds[0])
+                : undefined;
+            const busKey =
+                parentGen !== undefined && childGen !== undefined
+                    ? `${parentGen}|${childGen}`
+                    : null;
+            const busY = (busKey && childBusY.get(busKey)) ?? uy + (children[0].y - halfH - uy) / 2;
 
-            // Vertical stem from union down to bus
+            // Vertical stem from union down to child bus (ELK X)
             connections.push({
                 path: `M ${ux} ${uy} L ${ux} ${busY}`,
                 cssClass: "link descendant-link",
             });
 
             if (children.length === 1) {
-                // Single child: continue vertical line
                 connections.push({
-                    path: `M ${children[0].x} ${busY} L ${children[0].x} ${childY - halfH}`,
+                    path: `M ${children[0].x} ${busY} L ${children[0].x} ${children[0].y - halfH}`,
                     cssClass: "link descendant-link",
                 });
             } else {
-                // Horizontal bus spanning all children
                 const xs = children
                     .map((c) => c.x)
                     .sort((a, b) => a - b);
@@ -505,10 +502,9 @@ function extractPositions(elkResult, builder, config) {
                     cssClass: "link descendant-link",
                 });
 
-                // Vertical drops from bus to each child's top edge
                 for (const c of children) {
                     connections.push({
-                        path: `M ${c.x} ${busY} L ${c.x} ${childY - halfH}`,
+                        path: `M ${c.x} ${busY} L ${c.x} ${c.y - halfH}`,
                         cssClass: "link descendant-link",
                     });
                 }
