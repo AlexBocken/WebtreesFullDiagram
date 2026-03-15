@@ -69,7 +69,7 @@ class Module extends AbstractModule implements ModuleChartInterface, ModuleCusto
 
     public function customModuleVersion(): string
     {
-        return '0.1.0';
+        return '1.0.0';
     }
 
     public function customModuleSupportUrl(): string
