@@ -265,6 +265,16 @@
     background: #e9ecef;
 }
 
+/* ── Fullscreen ── */
+.full-diagram-container:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    background: #f8f9fa;
+}
+
 /* ── Print styles ── */
 @media print {
     .full-diagram-container {

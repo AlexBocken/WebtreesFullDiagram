@@ -79,12 +79,9 @@ export default class Chart {
 
     centerOnRoot() {
         const { width, height } = this.svg.node().getBoundingClientRect();
-        this.svg
-            .transition()
-            .duration(500)
-            .call(
-                this.zoomBehavior.transform,
-                zoomIdentity.translate(width / 2, height / 2)
-            );
+        this.svg.call(
+            this.zoomBehavior.transform,
+            zoomIdentity.translate(width / 2, height / 2)
+        );
     }
 }
